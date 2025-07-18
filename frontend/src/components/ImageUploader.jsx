@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import JSZip from 'jszip'; // Importar la librería JSZip
 
 // La URL de nuestro backend. Vite la tomará del archivo .env
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -6,6 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const ImageUploader = () => {
   const [files, setFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isZipping, setIsZipping] = useState(false); // Nuevo estado para la creación del ZIP
 
   const handleFileChange = (event) => {
     const selectedFiles = Array.from(event.target.files).map((file, index) => ({
@@ -25,32 +27,21 @@ const ImageUploader = () => {
 
     for (const fileData of files) {
       if (fileData.status === 'pendiente') {
-        // Actualizar UI a 'analizando'
         setFiles(prevFiles => prevFiles.map(f => f.id === fileData.id ? { ...f, status: 'analizando' } : f));
-
         const formData = new FormData();
         formData.append('image', fileData.file);
-
         try {
           const response = await fetch(`${API_URL}/api/rename`, {
             method: 'POST',
             body: formData,
           });
-
-          if (!response.ok) {
-            throw new Error(`Error en la respuesta del servidor: ${response.statusText}`);
-          }
-
+          if (!response.ok) throw new Error(`Error en la respuesta del servidor: ${response.statusText}`);
           const result = await response.json();
           const extension = fileData.originalName.split('.').pop();
           const finalNewName = `${result.newName}.${extension}`;
-          
-          // Actualizar UI a 'listo'
           setFiles(prevFiles => prevFiles.map(f => f.id === fileData.id ? { ...f, status: 'listo', newName: finalNewName } : f));
-
         } catch (error) {
           console.error(`Error procesando ${fileData.originalName}:`, error);
-          // Actualizar UI a 'error'
           setFiles(prevFiles => prevFiles.map(f => f.id === fileData.id ? { ...f, status: 'error' } : f));
         }
       }
@@ -67,6 +58,46 @@ const ImageUploader = () => {
     document.body.removeChild(link);
   };
 
+  // --- NUEVA FUNCIÓN PARA DESCARGAR TODO COMO ZIP ---
+  const handleDownloadAll = async () => {
+    const processedFiles = files.filter(f => f.status === 'listo');
+    if (processedFiles.length === 0) return;
+
+    setIsZipping(true);
+    const zip = new JSZip();
+
+    try {
+      // Obtener los datos de cada archivo y añadirlo al zip
+      const filePromises = processedFiles.map(async (fileData) => {
+        const response = await fetch(fileData.objectURL);
+        const blob = await response.blob();
+        zip.file(fileData.newName, blob);
+      });
+
+      await Promise.all(filePromises);
+
+      // Generar el archivo zip
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Crear y simular el clic en el enlace de descarga
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = 'imagenes-renombradas.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href); // Liberar memoria
+
+    } catch (error) {
+      console.error("Error al crear el archivo ZIP:", error);
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+  // Memoizar el cálculo para no recalcular en cada render
+  const hasProcessedFiles = useMemo(() => files.some(f => f.status === 'listo'), [files]);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -74,8 +105,12 @@ const ImageUploader = () => {
           Seleccionar Imágenes
         </label>
         <input type="file" id="image-input" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
-        <button onClick={handleProcessImages} disabled={isProcessing || files.length === 0} className="w-full sm:w-auto flex-grow text-center bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onClick={handleProcessImages} disabled={isProcessing || isZipping} className="w-full sm:w-auto flex-grow text-center bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
           {isProcessing ? 'Procesando...' : 'Iniciar Procesamiento'}
+        </button>
+        {/* --- NUEVO BOTÓN DE DESCARGA --- */}
+        <button onClick={handleDownloadAll} disabled={!hasProcessedFiles || isProcessing || isZipping} className="w-full sm:w-auto flex-grow text-center bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+          {isZipping ? 'Comprimiendo...' : 'Descargar Todo (.zip)'}
         </button>
       </div>
       
@@ -88,7 +123,7 @@ const ImageUploader = () => {
   );
 };
 
-// Componente para cada fila de archivo
+// Componente para cada fila de archivo (sin cambios)
 const FileRow = ({ fileData, onDownload }) => (
   <div className="bg-gray-700/60 p-3 rounded-lg flex items-center gap-4 transition-all">
     <img src={fileData.objectURL} alt="thumbnail" className="w-12 h-12 object-cover rounded-md flex-shrink-0" />
@@ -111,7 +146,7 @@ const FileRow = ({ fileData, onDownload }) => (
   </div>
 );
 
-// Componente para el indicador de estado
+// Componente para el indicador de estado (sin cambios)
 const StatusBadge = ({ status }) => {
   switch (status) {
     case 'analizando':
