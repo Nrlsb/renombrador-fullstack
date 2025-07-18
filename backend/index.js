@@ -34,14 +34,36 @@ app.post('/api/rename', upload.single('image'), async (req, res) => {
   }
 
   try {
-    // --- MEJORA: Leer las instrucciones de estilo del usuario ---
-    const userStyle = req.body.style || '';
+    const userExample = req.body.style || '';
+    let prompt;
 
-    // --- MEJORA: Construir el prompt dinámicamente ---
-    let basePrompt = "Analiza esta imagen y genera un nombre de archivo conciso y descriptivo para ella en formato-kebab-case. Responde únicamente con el nombre de archivo generado, sin la extensión.";
-    
-    if (userStyle) {
-      basePrompt += `\n\nInstrucciones de Estilo Adicionales: "${userStyle}"`;
+    // --- MEJORA: Construir un prompt que enseña a la IA a razonar ---
+    if (userExample) {
+      const exampleKebab = userExample
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-');
+
+      prompt = `Tu tarea es actuar como un experto en catalogación de productos y crear un nombre de archivo descriptivo en formato kebab-case para la imagen proporcionada.
+
+Usa el siguiente ejemplo como guía para tu razonamiento:
+---
+EJEMPLO GUÍA:
+1.  **Nombre de Producto de Referencia:** "${userExample}"
+2.  **Análisis de Atributos:** Para ese nombre, los atributos clave son el tipo de producto, la marca, la línea, el acabado, el color y el tamaño.
+3.  **Nombre de Archivo Resultante:** "${exampleKebab}"
+---
+
+Ahora, aplica este mismo proceso a la imagen que te estoy enviando:
+1.  **Analiza la imagen:** Identifica los atributos clave del producto que se muestra (tipo, marca, línea, etc.).
+2.  **Construye el nombre:** Une los atributos que encontraste usando guiones.
+3.  **Formatea el resultado:** Asegúrate de que todo esté en minúsculas.
+
+Responde únicamente con el nombre de archivo final en formato kebab-case. No incluyas ninguna otra explicación.`;
+
+    } else {
+      // Si no se proporciona un ejemplo, se usa el prompt simple original.
+      prompt = "Analiza esta imagen y genera un nombre de archivo conciso y descriptivo para ella en formato kebab-case. Responde únicamente con el nombre de archivo generado, sin la extensión.";
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -53,7 +75,7 @@ app.post('/api/rename', upload.single('image'), async (req, res) => {
       },
     };
 
-    const result = await model.generateContent([basePrompt, imagePart]);
+    const result = await model.generateContent([prompt, imagePart]);
     const response = await result.response;
     const newNameRaw = response.text();
     
