@@ -1,0 +1,34 @@
+# .gitignore para un proyecto de Node.js
+
+# Archivo de Variables de Entorno
+# ¡MUY IMPORTANTE! Esto evita que tus claves secretas (API keys, etc.)
+# se suban a un repositorio público como GitHub.
+.env
+
+# Dependencias
+# La carpeta node_modules contiene todos los paquetes de terceros.
+# Se puede recrear en cualquier momento ejecutando `npm install`.
+# Suele ser muy pesada y no debe estar en el control de versiones.
+node_modules/
+
+# Archivos de Log
+# Archivos generados durante la ejecución para registrar eventos o errores.
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Archivos de diagnóstico generados por Node.js en caso de un crash
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Carpetas de build o producción
+# Si tuvieras un paso de compilación (ej. con TypeScript), ignorarías la salida.
+dist/
+build/
+
+# Archivos del sistema operativo
+# Archivos específicos de macOS
+.DS_Store
+
+# Archivos específicos de Windows
+Thumbs.db
